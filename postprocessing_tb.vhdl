@@ -10,33 +10,89 @@ entity PostProcessing_tb is
 end PostProcessing_tb;
 
 architecture Behavioral of PostProcessing_tb is
+   constant DATA_WIDTH : integer := 32;  -- Change to 64, 128, or 256 for testing
+
    -- Component Declaration
    component PostProcessing
-       Port (
+       generic (
+           DATA_WIDTH : integer
+       );
+       port (
            clk : in STD_LOGIC;
            reset : in STD_LOGIC;
-           raw_data : in STD_LOGIC_VECTOR(31 downto 0);
-           processed_data : out STD_LOGIC_VECTOR(31 downto 0)
+           raw_data : in STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0);
+           processed_data : out STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0)
        );
    end component;
 
-   -- Signals for simulation
+   -- Signals
    signal clk : STD_LOGIC := '0';
    signal reset : STD_LOGIC := '1';
-   signal raw_data : STD_LOGIC_VECTOR(31 downto 0) := (others => '0');
-   signal processed_data : STD_LOGIC_VECTOR(31 downto 0);
+   signal raw_data : STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0) := (others => '0');
+   signal processed_data : STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0);
 
-   -- Clock generation
+   -- Clock period
    constant clk_period : time := 10 ns;
 
    -- File handling
    file raw_data_file : text open read_mode is "raw_data.hex";
    file output_file : text open write_mode is "processed_data_output.txt";
 
+   -- Convert a hex string to STD_LOGIC_VECTOR
+   function to_stdlogicvector(hex_str : string) return STD_LOGIC_VECTOR is
+       variable result : STD_LOGIC_VECTOR(hex_str'length * 4 - 1 downto 0);
+       constant hex_chars : string := "0123456789ABCDEF";
+       variable nibble : STD_LOGIC_VECTOR(3 downto 0);
+   begin
+       for i in 0 to hex_str'length - 1 loop
+           for j in 0 to 15 loop
+               if hex_str(i+1) = hex_chars(j+1) then
+                   nibble := std_logic_vector(to_unsigned(j, 4));
+                   result((i+1)*4-1 downto i*4) := nibble;
+               end if;
+           end loop;
+       end loop;
+       return result;
+   end function;
+
+   -- Convert a STD_LOGIC_VECTOR to a hex string
+   function to_hex(data : STD_LOGIC_VECTOR) return string is
+       variable hex_str : string(1 to (data'length / 4));
+       variable nibble : STD_LOGIC_VECTOR(3 downto 0);
+       constant hex_chars : string := "0123456789ABCDEF";
+   begin
+       for i in 0 to (data'length / 4) - 1 loop
+           nibble := data((i + 1) * 4 - 1 downto i * 4);  -- Extract 4 bits (1 nibble)
+           case nibble is
+               when "0000" => hex_str(i + 1) := '0';
+               when "0001" => hex_str(i + 1) := '1';
+               when "0010" => hex_str(i + 1) := '2';
+               when "0011" => hex_str(i + 1) := '3';
+               when "0100" => hex_str(i + 1) := '4';
+               when "0101" => hex_str(i + 1) := '5';
+               when "0110" => hex_str(i + 1) := '6';
+               when "0111" => hex_str(i + 1) := '7';
+               when "1000" => hex_str(i + 1) := '8';
+               when "1001" => hex_str(i + 1) := '9';
+               when "1010" => hex_str(i + 1) := 'A';
+               when "1011" => hex_str(i + 1) := 'B';
+               when "1100" => hex_str(i + 1) := 'C';
+               when "1101" => hex_str(i + 1) := 'D';
+               when "1110" => hex_str(i + 1) := 'E';
+               when "1111" => hex_str(i + 1) := 'F';
+               when others => hex_str(i + 1) := '0';  -- Default case
+           end case;
+       end loop;
+       return hex_str;
+   end function;
+
 begin
    -- Instantiate the Unit Under Test (UUT)
    uut: PostProcessing
-       Port map (
+       generic map (
+           DATA_WIDTH => DATA_WIDTH
+       )
+       port map (
            clk => clk,
            reset => reset,
            raw_data => raw_data,
@@ -55,38 +111,34 @@ begin
    -- Stimulus process
    stimulus_process : process
        variable line_buffer : line;
-       variable raw_data_value : std_logic_vector(31 downto 0);
-       variable hex_string : string(1 to 8); -- Adjust for 32-bit hexadecimal
+       variable hex_string : string(1 to DATA_WIDTH / 4);  -- Adjust hex string size based on DATA_WIDTH
+       variable raw_data_value : STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0);
    begin
-       -- Initialize
-       wait for 20 ns;
+       -- Reset
+       reset <= '1';
+       wait for clk_period * 2;
        reset <= '0';
 
-       -- Debug: Print simulation start
-       write(line_buffer, string'("Simulation started."));
-       writeline(output_file, line_buffer); -- Write to output file
-
-       -- Read data from the file and process
+       -- Read and simulate
        while not endfile(raw_data_file) loop
            readline(raw_data_file, line_buffer);
-           hread(line_buffer, raw_data_value); -- Read a hex value
+           -- Read hex string from file
+           read(line_buffer, hex_string);
+           -- Convert hex string to STD_LOGIC_VECTOR
+           raw_data_value := to_stdlogicvector(hex_string);
+           
+           -- Assign to raw_data signal
            raw_data <= raw_data_value;
 
-
-           wait for clk_period; -- Wait for a clock cycle to simulate input
+           wait for clk_period;
 
            -- Convert processed_data to hexadecimal string
-           hex_string := to_hstring(processed_data);
-
-           -- Write processed_data to output file in hexadecimal format
-           write(line_buffer, string'(hex_string & ", "));
-           writeline(output_file, line_buffer); -- Write to output file
+           hex_string := to_hex(processed_data);
+           write(line_buffer, hex_string);  -- Write the hex string to output file
+           writeline(output_file, line_buffer);
        end loop;
 
-       -- Debug: Print simulation end
-       write(output_file, string'("Simulation completed."));
-       writeline(output_file, line_buffer); -- Write to output file
-
-       wait; -- End simulation
+       -- Finish simulation
+       wait;
    end process;
 end Behavioral;
