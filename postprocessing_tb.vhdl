@@ -33,29 +33,45 @@ architecture Behavioral of PostProcessing_tb is
     file raw_data_file : text open read_mode is "raw_data.hex";
     file output_file : text open write_mode is "processed_data_output.txt";
 
+    -- Convert hex string to std_logic_vector
     function to_stdlogicvector(hex_str : string) return STD_LOGIC_VECTOR is
-        variable result : STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0);
-        constant hex_chars : string := "0123456789ABCDEF";
+        variable result : STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0) := (others => '0');
         variable nibble : STD_LOGIC_VECTOR(3 downto 0);
+        variable idx : integer;
     begin
         for i in 0 to hex_str'length - 1 loop
-            for j in 0 to 15 loop
-                if hex_str(i+1) = hex_chars(j+1) then
-                    nibble := std_logic_vector(to_unsigned(j, 4));
-                    result((i+1)*4-1 downto i*4) := nibble;
-                end if;
-            end loop;
+            case hex_str(i + 1) is
+                when '0' => nibble := "0000";
+                when '1' => nibble := "0001";
+                when '2' => nibble := "0010";
+                when '3' => nibble := "0011";
+                when '4' => nibble := "0100";
+                when '5' => nibble := "0101";
+                when '6' => nibble := "0110";
+                when '7' => nibble := "0111";
+                when '8' => nibble := "1000";
+                when '9' => nibble := "1001";
+                when 'A' | 'a' => nibble := "1010";
+                when 'B' | 'b' => nibble := "1011";
+                when 'C' | 'c' => nibble := "1100";
+                when 'D' | 'd' => nibble := "1101";
+                when 'E' | 'e' => nibble := "1110";
+                when 'F' | 'f' => nibble := "1111";
+                when others => nibble := "0000";
+            end case;
+            idx := (hex_str'length - 1 - i) * 4;
+            result(idx + 3 downto idx) := nibble;
         end loop;
         return result;
     end function;
 
+    -- Convert std_logic_vector to hex string
     function to_hex(data : STD_LOGIC_VECTOR) return string is
         variable hex_str : string(1 to DATA_WIDTH / 4);
         variable nibble : STD_LOGIC_VECTOR(3 downto 0);
-        constant hex_chars : string := "0123456789ABCDEF";
     begin
         for i in 0 to (DATA_WIDTH / 4) - 1 loop
-            nibble := data((i + 1) * 4 - 1 downto i * 4);
+            nibble := data((DATA_WIDTH - 1 - i * 4) downto (DATA_WIDTH - 4 - i * 4));
             case nibble is
                 when "0000" => hex_str(i + 1) := '0';
                 when "0001" => hex_str(i + 1) := '1';
@@ -91,6 +107,7 @@ begin
             processed_data => processed_data
         );
 
+    -- Clock generation
     clk_process : process
     begin
         while true loop
@@ -101,12 +118,14 @@ begin
         end loop;
     end process;
 
+    -- Stimulus
     stimulus_process : process
         variable line_buffer : line;
         variable hex_string : string(1 to DATA_WIDTH / 4);
         variable raw_data_value : STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0);
         variable processed_data_str : string(1 to DATA_WIDTH / 4);
     begin
+        wait for clk_period;
         reset <= '1';
         wait for clk_period * 2;
         reset <= '0';
@@ -117,7 +136,7 @@ begin
             raw_data_value := to_stdlogicvector(hex_string);
             raw_data <= raw_data_value;
 
-            wait for clk_period;
+            wait for clk_period * 2;  -- Allow processing to occur
 
             processed_data_str := to_hex(processed_data);
             write(line_buffer, processed_data_str);
