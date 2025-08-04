@@ -1,0 +1,2 @@
+Run,Start,End,Duration(s),Status,Speed_MBps,Entropy,Mean,Chi_Square,p_value,MonteCarloPi,MCError,SerialCorr
+1,2025-06-03 16:51:50.810089,2025-06-03 16:52:03.067301,12.257,SUCCESS,8.158,7.999998,127.5029,None,None,3.140961206,0.02,0.000108
